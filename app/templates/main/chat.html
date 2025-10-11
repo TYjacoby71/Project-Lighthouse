@@ -1,0 +1,41 @@
+{% extends 'layout.html' %}
+{% block title %}Chat{% endblock %}
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+  <h3 class="mb-3">Corpus Chat</h3>
+  <div class="mb-3">
+    <textarea id="question" class="form-control" rows="4" placeholder="Ask a question about your documents..."></textarea>
+  </div>
+  <div class="d-flex justify-content-end mb-3">
+    <button id="ask" class="btn btn-primary">Ask</button>
+  </div>
+  <div id="answer" class="card d-none">
+    <div class="card-body">
+      <div id="answer-text"></div>
+      <hr/>
+      <div>
+        <strong>Contexts</strong>
+        <ol id="contexts"></ol>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('ask').addEventListener('click', async () => {
+    const q = document.getElementById('question').value.trim();
+    if (!q) return;
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) });
+    const data = await res.json();
+    const card = document.getElementById('answer');
+    card.classList.remove('d-none');
+    document.getElementById('answer-text').innerText = data.answer || 'No answer';
+    const ctx = document.getElementById('contexts');
+    ctx.innerHTML = '';
+    (data.contexts || []).forEach(c => {
+      const li = document.createElement('li');
+      li.innerText = c.slice(0, 500);
+      ctx.appendChild(li);
+    });
+  });
+</script>
+{% endblock %}

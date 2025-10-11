@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-3">Communications</h3>
+  <form class="row g-2 mb-3" method="GET">
+    <div class="col-md-3"><input class="form-control" name="q" placeholder="Search..." value="{{ request.args.get('q','') }}"/></div>
+    <div class="col-md-2"><input class="form-control" name="sender" placeholder="Sender" value="{{ request.args.get('sender','') }}"/></div>
+    <div class="col-md-2"><input class="form-control" name="recipients" placeholder="Recipients" value="{{ request.args.get('recipients','') }}"/></div>
+    <div class="col-md-2"><input class="form-control" name="start" type="date" value="{{ request.args.get('start','') }}"/></div>
+    <div class="col-md-2"><input class="form-control" name="end" type="date" value="{{ request.args.get('end','') }}"/></div>
+    <div class="col-md-1 d-grid"><button class="btn btn-outline-secondary" type="submit">Filter</button></div>
+  </form>
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Sender</th>
+        <th>Recipients</th>
+        <th>Date</th>
+        <th>Filename</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in communications %}
+      <tr onclick="location.href='{{ url_for('main.communication_detail', communication_id=c.id) }}'" style="cursor:pointer;">
+        <td>{{ c.sender }}</td>
+        <td>{{ c.recipients }}</td>
+        <td>{{ c.sent_at or '' }}</td>
+        <td>{{ c.original_filename }}</td>
+        <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('main.sender_stats', sender_name=c.sender) }}" onclick="event.stopPropagation();">Sender Stats</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
