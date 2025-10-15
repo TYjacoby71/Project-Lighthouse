@@ -35,6 +35,66 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    name: Mapped[Optional[str]] = mapped_column(String(255))
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    organization_id: Mapped[int] = mapped_column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    organization = relationship('Organization', back_populates='users')
+
+
+class Communication(db.Model):
+    __tablename__ = 'communications'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
+    sender: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipients: Mapped[str] = mapped_column(String(1000), nullable=False)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    sha256_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_md: Mapped[Optional[str]] = mapped_column(Text)
+    ai_analysis: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    organization = relationship('Organization', back_populates='communications')
+    tags = relationship('Tag', secondary=communication_tags, back_populates='communications')
+
+    __table_args__ = (
+        Index('ix_communications_organization_sender', 'organization_id', 'sender'),
+        Index('ix_communications_organization_sent_at', 'organization_id', 'sent_at'),
+        Index('ix_communications_sha256', 'sha256_hash'),
+    )
+
+
+class Tag(db.Model):
+    __tablename__ = 'tags'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    color: Mapped[Optional[str]] = mapped_column(String(7))  # hex color
+    organization_id: Mapped[int] = mapped_column(Integer, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    organization = relationship('Organization', back_populates='tags')
+    communications = relationship('Communication', secondary=communication_tags, back_populates='tags')
+
+    __table_args__ = (
+        Index('ix_tags_organization_name', 'organization_id', 'name', unique=True),
+    )
+
+
+@login_manager.user_loader
+def load_user(user_id: str) -> Optional[User]:
+    return db.session.get(User, int(user_id))
+
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
