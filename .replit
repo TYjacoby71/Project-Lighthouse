@@ -15,7 +15,13 @@ packages = [
   "python313Packages.markdownify",
   "python313Packages.markdown",
   "python313Packages.bleach",
-  "python313Packages.requests"
+  "python313Packages.requests",
+  "python313Packages.spacy",
+  "python313Packages.textblob",
+  "python313Packages.pymupdf",
+  "python313Packages.langchain",
+  "python313Packages.langchain-community",
+  "python313Packages.faiss"
 ]
 
 [workflows]
