@@ -1,0 +1,66 @@
+{% extends 'layout.html' %}
+{% block title %}Sender Stats{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-4">Sender: {{ sender_name }}</h3>
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">Sentiment Over Time</div>
+        <div class="card-body">
+          <canvas id="sentimentChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">Emotional Tones</div>
+        <div class="card-body">
+          <canvas id="tonesChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">Linguistic Patterns</div>
+        <div class="card-body">
+          <canvas id="patternsChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">Top Keywords</div>
+        <div class="card-body">
+          <canvas id="keywordsChart" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const timeline = {{ timeline|tojson }};
+  const tones = {{ tones|tojson }};
+  const patterns = {{ patterns|tojson }};
+  const keywords = {{ keywords|tojson }};
+
+  new Chart(document.getElementById('sentimentChart'), {
+    type: 'line',
+    data: {
+      labels: timeline.map(x => x.t || ''),
+      datasets: [{ label: 'Sentiment', data: timeline.map(x => x.sentiment), borderColor: '#0d6efd' }]
+    },
+    options: { scales: { y: { min: -1, max: 1 } } }
+  });
+
+  const tonesKeys = Object.keys(tones); const tonesVals = Object.values(tones);
+  new Chart(document.getElementById('tonesChart'), { type: 'pie', data: { labels: tonesKeys, datasets: [{ data: tonesVals }] } });
+
+  const pattKeys = Object.keys(patterns); const pattVals = Object.values(patterns);
+  new Chart(document.getElementById('patternsChart'), { type: 'bar', data: { labels: pattKeys, datasets: [{ data: pattVals, backgroundColor: '#6610f2' }] } });
+
+  const kwKeys = Object.keys(keywords).slice(0, 20); const kwVals = kwKeys.map(k => keywords[k]);
+  new Chart(document.getElementById('keywordsChart'), { type: 'bar', data: { labels: kwKeys, datasets: [{ data: kwVals, backgroundColor: '#198754' }] } });
+</script>
+{% endblock %}

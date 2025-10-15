@@ -1,0 +1,95 @@
+{% extends 'layout.html' %}
+{% block title %}Communication Detail{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-lg-8">
+      <h4 class="mb-3">{{ communication.sender }} → {{ communication.recipients }}</h4>
+      <div class="card mb-4">
+        <div class="card-body">
+          <div>{{ communication.sent_at or '' }}</div>
+          <hr/>
+          <div>{{ communication.original_filename }}</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">Content</div>
+        <div class="card-body">
+          <div class="markdown-body">{{ html_content | safe }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Analysis</span>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-outline-secondary" id="draft-response">Draft Response</button>
+            <button class="btn btn-sm btn-outline-primary" id="view-original">View Original</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div>
+            <strong>Theme:</strong> {{ (communication.ai_analysis or {}).get('theme') or '—' }}
+          </div>
+          <div class="mt-2">
+            <strong>Keywords:</strong>
+            <div>
+              {% for kw in (communication.ai_analysis or {}).get('keywords', []) %}
+              <span class="badge text-bg-secondary me-1">{{ kw }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="mt-2"><strong>Tone:</strong> {{ (communication.ai_analysis or {}).get('emotional_tone') or '—' }}</div>
+          <div class="mt-2">
+            <strong>Patterns:</strong>
+            <ul class="mb-0">
+              {% for p in (communication.ai_analysis or {}).get('linguistic_patterns', []) %}
+              <li>{{ p }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('view-original').addEventListener('click', async () => {
+    const res = await fetch('{{ url_for('main.presigned_url', communication_id=communication.id) }}');
+    const data = await res.json();
+    if (data.url) window.open(data.url, '_blank');
+  });
+
+  document.getElementById('draft-response').addEventListener('click', async () => {
+    const draftBtn = document.getElementById('draft-response');
+    draftBtn.disabled = true;
+    const res = await fetch('{{ url_for('main.draft_response', communication_id=communication.id) }}', { method: 'POST' });
+    const data = await res.json();
+    draftBtn.disabled = false;
+    const modalEl = document.getElementById('draftModal');
+    modalEl.querySelector('#draftText').value = data.draft || 'No draft generated';
+    const bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
+  });
+</script>
+
+<!-- Draft Modal -->
+<div class="modal fade" id="draftModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Draft Response</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <textarea id="draftText" class="form-control" rows="12"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('draftText').value)">Copy</button>
+      </div>
+    </div>
+  </div>
+ </div>
+{% endblock %}
