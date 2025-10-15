@@ -3,7 +3,20 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["python313", "python313Packages.flask", "python313Packages.pip"]
+packages = [
+  "python313",
+  "python313Packages.flask", 
+  "python313Packages.flask-sqlalchemy",
+  "python313Packages.flask-login",
+  "python313Packages.flask-migrate",
+  "python313Packages.psycopg2",
+  "python313Packages.boto3",
+  "python313Packages.python-dotenv",
+  "python313Packages.markdownify",
+  "python313Packages.markdown",
+  "python313Packages.bleach",
+  "python313Packages.requests"
+]
 
 [workflows]
 runButton = "Run Flask App"
