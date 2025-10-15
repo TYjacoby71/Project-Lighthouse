@@ -3,7 +3,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["python313Packages.flask"]
+packages = ["python313", "python313Packages.flask", "python313Packages.pip"]
 
 [workflows]
 runButton = "Run Flask App"
