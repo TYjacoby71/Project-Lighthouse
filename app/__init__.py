@@ -22,9 +22,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
     # Basic config
+    # Use SQLite DB under instance folder by default so it persists and matches shipped DB
+    default_sqlite_uri = f"sqlite:///{os.path.join(app.instance_path, 'lighthouse.db')}"
     app.config.from_mapping(
         SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret-key'),
-        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 'sqlite:///lighthouse.db'),
+        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', default_sqlite_uri),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=int(os.getenv('UPLOAD_MAX_SIZE_MB', '25')) * 1024 * 1024,
         AWS_REGION=os.getenv('AWS_REGION', ''),
