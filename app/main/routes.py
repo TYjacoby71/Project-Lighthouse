@@ -500,3 +500,69 @@ def draft_response(communication_id: int):
     if not text_out:
         text_out = "AI draft unavailable. Configure GEMINI_API_KEY."
     return jsonify({'draft': text_out})
+
+
+@main_bp.route('/setup')
+@login_required
+def setup_page():
+    cfg = current_app.config
+
+    def present(key: str) -> bool:
+        val = cfg.get(key)
+        if isinstance(val, str):
+            return bool(val.strip())
+        return bool(val)
+
+    envs = [
+        {"name": "SECRET_KEY", "required": True, "present": present('SECRET_KEY'), "notes": "Flask session key"},
+        {"name": "DATABASE_URL", "required": False, "present": present('DATABASE_URL'), "notes": "PostgreSQL recommended; SQLite used if empty"},
+        {"name": "AWS_REGION", "required": False, "present": present('AWS_REGION'), "notes": "S3 region for file storage"},
+        {"name": "AWS_S3_BUCKET", "required": False, "present": present('AWS_S3_BUCKET'), "notes": "Private S3 bucket name"},
+        {"name": "AWS_ACCESS_KEY_ID", "required": False, "present": bool(os.getenv('AWS_ACCESS_KEY_ID')), "notes": "S3 access key (env only)"},
+        {"name": "AWS_SECRET_ACCESS_KEY", "required": False, "present": bool(os.getenv('AWS_SECRET_ACCESS_KEY')), "notes": "S3 secret key (env only)"},
+        {"name": "GEMINI_API_KEY", "required": False, "present": present('GEMINI_API_KEY'), "notes": "Google Gemini API key"},
+        {"name": "GOOGLE_CLIENT_ID", "required": False, "present": bool(os.getenv('GOOGLE_CLIENT_ID')), "notes": "Google OAuth client id"},
+        {"name": "GOOGLE_CLIENT_SECRET", "required": False, "present": bool(os.getenv('GOOGLE_CLIENT_SECRET')), "notes": "Google OAuth client secret"},
+        {"name": "OAUTH_CALLBACK_URL", "required": False, "present": bool(os.getenv('OAUTH_CALLBACK_URL')), "notes": "OAuth redirect URI"},
+        {"name": "ORIGIN", "required": False, "present": present('ORIGIN'), "notes": "Frontend origin (CORS)"},
+        {"name": "UPLOAD_MAX_SIZE_MB", "required": False, "present": bool(os.getenv('UPLOAD_MAX_SIZE_MB')), "notes": "Upload size limit (default 25MB)"},
+        {"name": "SESSION_COOKIE_SECURE", "required": False, "present": bool(os.getenv('SESSION_COOKIE_SECURE')), "notes": "Set 'true' in production"},
+        # Future optional integrations
+        {"name": "TWILIO_ACCOUNT_SID", "required": False, "present": bool(os.getenv('TWILIO_ACCOUNT_SID')), "notes": "(Future) SMS integration"},
+        {"name": "TWILIO_AUTH_TOKEN", "required": False, "present": bool(os.getenv('TWILIO_AUTH_TOKEN')), "notes": "(Future) SMS integration"},
+        {"name": "TWILIO_FROM_NUMBER", "required": False, "present": bool(os.getenv('TWILIO_FROM_NUMBER')), "notes": "(Future) SMS sender"},
+        {"name": "SMTP_HOST", "required": False, "present": bool(os.getenv('SMTP_HOST')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_PORT", "required": False, "present": bool(os.getenv('SMTP_PORT')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_USER", "required": False, "present": bool(os.getenv('SMTP_USER')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_PASSWORD", "required": False, "present": bool(os.getenv('SMTP_PASSWORD')), "notes": "(Future) Email sending"},
+    ]
+
+    # Integration readiness checks
+    db_url = None
+    try:
+        db_url = str(db.engine.url)
+    except Exception:
+        db_url = 'Unavailable'
+
+    def check_import(mod_path: str) -> bool:
+        try:
+            __import__(mod_path)
+            return True
+        except Exception:
+            return False
+
+    integrations = [
+        {"name": "Database (SQLAlchemy)", "ready": True, "detail": db_url},
+        {"name": "S3 Storage", "ready": (present('AWS_REGION') and present('AWS_S3_BUCKET') and bool(os.getenv('AWS_ACCESS_KEY_ID')) and bool(os.getenv('AWS_SECRET_ACCESS_KEY'))), "detail": "AWS region/bucket + keys"},
+        {"name": "Google OAuth", "ready": (bool(os.getenv('GOOGLE_CLIENT_ID')) and bool(os.getenv('GOOGLE_CLIENT_SECRET'))), "detail": "Google client configured"},
+        {"name": "Gemini API", "ready": present('GEMINI_API_KEY'), "detail": "GEMINI_API_KEY present"},
+        {"name": "PyMuPDF (fitz)", "ready": check_import('fitz'), "detail": "PDF text extraction"},
+        {"name": "spaCy model", "ready": check_import('spacy'), "detail": "NER/POS (model may need download)"},
+        {"name": "FAISS + LangChain", "ready": (check_import('langchain') and check_import('langchain_community.vectorstores.faiss')), "detail": "Vector index"},
+        {"name": "Rate limiting", "ready": True, "detail": "In-memory (dev); configure storage in prod"},
+        {"name": "SMS (Twilio)", "ready": False, "detail": "Not implemented yet"},
+        {"name": "Email sending", "ready": False, "detail": "Not implemented yet"},
+        {"name": "Google Drive import", "ready": False, "detail": "Not implemented yet"},
+    ]
+
+    return render_template('main/setup.html', envs=envs, integrations=integrations)
