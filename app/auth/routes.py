@@ -1,13 +1,48 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .. import db
+from .. import db, oauth
 from ..models import User, Organization
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+@auth_bp.route('/google/login')
+def google_login():
+    if not oauth.google:  # Google not configured
+        flash('Google OAuth is not configured.', 'warning')
+        return redirect(url_for('auth.login'))
+    redirect_uri = request.url_root.rstrip('/') + url_for('auth.google_callback')
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@auth_bp.route('/google/callback')
+def google_callback():
+    if not oauth.google:
+        flash('Google OAuth is not configured.', 'warning')
+        return redirect(url_for('auth.login'))
+    token = oauth.google.authorize_access_token()
+    userinfo = token.get('userinfo') or {}
+    email = (userinfo.get('email') or '').lower().strip()
+    name = userinfo.get('name') or ''
+    if not email:
+        flash('Failed to retrieve Google account email.', 'danger')
+        return redirect(url_for('auth.login'))
+
+    user = db.session.query(User).filter_by(email=email).first()
+    if not user:
+        # Auto-provision organization and user
+        org = Organization(name=name or email.split('@')[0] or 'Org')
+        db.session.add(org)
+        db.session.flush()
+        user = User(email=email, name=name, password_hash='', organization_id=org.id)
+        db.session.add(user)
+        db.session.commit()
+
+    login_user(user)
+    return redirect(url_for('main.dashboard'))
+
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])

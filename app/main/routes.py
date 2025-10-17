@@ -167,31 +167,60 @@ def api_upload():
     else:
         text = text_content or file_bytes.decode('utf-8', errors='ignore')
 
-    # Naive text→Markdown: paragraphs and lists preservation
+    # Basic cleanup
     if text:
+        cleaned = '\n'.join([line.strip() for line in text.splitlines()])
         from markdownify import markdownify as md
-        # markdownify expects HTML, but we can wrap paragraphs simply
-        paragraphs = [p.strip() for p in text.split('\n')]
+        paragraphs = [p for p in cleaned.split('\n')]
         htmlish = ''.join(f'<p>{p}</p>' if p else '<br/>' for p in paragraphs)
         content_md = md(htmlish)
 
-    # spaCy + simple sentiment via TextBlob as placeholder
+    # NLP metrics: word/char, readability, sentiment, POS, entities
     nlp_metrics = {
         'word_count': len(text.split()) if text else 0,
+        'char_count': len(text) if text else 0,
+        'readability_score': None,
+        'pos_counts': {},
         'named_entities': [],
         'sentiment_score': 0.0,
     }
     try:
-        import spacy
-        from textblob import TextBlob
-        nlp = spacy.load('en_core_web_sm')
-        doc = nlp(text or '')
-        ents = []
-        for ent in doc.ents:
-            if ent.label_ in {'PERSON', 'ORG', 'GPE', 'DATE', 'MONEY'}:
-                ents.append({'text': ent.text, 'label': ent.label_})
-        nlp_metrics['named_entities'] = ents
-        nlp_metrics['sentiment_score'] = float(TextBlob(text or '').sentiment.polarity)
+        # readability
+        try:
+            import textstat
+            nlp_metrics['readability_score'] = float(textstat.flesch_kincaid_grade(text or ''))
+        except Exception:
+            pass
+
+        # sentiment via VADER or TextBlob fallback
+        try:
+            from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+            vs = SentimentIntensityAnalyzer()
+            nlp_metrics['sentiment_score'] = float(vs.polarity_scores(text or '').get('compound', 0.0))
+        except Exception:
+            try:
+                from textblob import TextBlob
+                nlp_metrics['sentiment_score'] = float(TextBlob(text or '').sentiment.polarity)
+            except Exception:
+                pass
+
+        # spaCy NER + POS counts
+        try:
+            import spacy
+            nlp = spacy.load('en_core_web_sm')
+            doc = nlp(text or '')
+            ents = []
+            for ent in doc.ents:
+                if ent.label_ in {'PERSON', 'ORG', 'GPE', 'DATE', 'MONEY'}:
+                    ents.append({'text': ent.text, 'label': ent.label_})
+            nlp_metrics['named_entities'] = ents
+            pos_counts = {'NOUN': 0, 'VERB': 0, 'ADJ': 0, 'ADV': 0}
+            for token in doc:
+                if token.pos_ in pos_counts:
+                    pos_counts[token.pos_] += 1
+            nlp_metrics['pos_counts'] = pos_counts
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -245,6 +274,12 @@ def api_upload():
         original_filename=original_filename,
         content_md=content_md,
         ai_analysis=ai_analysis,
+        word_count=nlp_metrics.get('word_count'),
+        char_count=nlp_metrics.get('char_count'),
+        readability_score=nlp_metrics.get('readability_score'),
+        sentiment_score=nlp_metrics.get('sentiment_score'),
+        auto_detected_entities=nlp_metrics.get('named_entities'),
+        pos_counts=nlp_metrics.get('pos_counts'),
     )
     db.session.add(comm)
     db.session.commit()
@@ -298,6 +333,28 @@ def presigned_url(communication_id: int):
         return jsonify({'url': url})
     except Exception:
         return jsonify({'error': 'Failed to create URL'}), 500
+
+
+@main_bp.route('/api/communications/<int:communication_id>/integrity')
+@login_required
+def integrity_check(communication_id: int):
+    comm = db.session.get(Communication, communication_id)
+    if not comm or comm.organization_id != current_user.organization_id:
+        return jsonify({'error': 'Not found'}), 404
+
+    try:
+        if comm.storage_path.startswith('local:'):
+            path = comm.storage_path[len('local:'):]
+            with open(path, 'rb') as f:
+                data = f.read()
+        else:
+            s3 = boto3.client('s3', region_name=current_app.config['AWS_REGION'])
+            obj = s3.get_object(Bucket=current_app.config['AWS_S3_BUCKET'], Key=comm.storage_path)
+            data = obj['Body'].read()
+        h = hashlib.sha256(data).hexdigest()
+        return jsonify({'ok': h == comm.sha256_hash, 'stored': comm.sha256_hash, 'computed': h})
+    except Exception as e:
+        return jsonify({'error': 'Integrity check failed'}), 500
 
 
 @main_bp.route('/api/communications/<int:communication_id>/download')

@@ -16,6 +16,7 @@
           <a class="btn btn-sm btn-outline-warning ms-2" href="{{ url_for('auth.logout') }}">Logout</a>
           {% else %}
           <a class="btn btn-sm btn-outline-light" href="{{ url_for('auth.login') }}">Login</a>
+          <a class="btn btn-sm btn-success ms-2" href="{{ url_for('auth.google_login') }}">Sign in with Google</a>
           {% endif %}
         </div>
       </div>
@@ -30,6 +31,12 @@
         </div>
       {% endif %}
     {% endwith %}
+
+    <div class="container mt-3">
+      <div class="alert alert-warning small" role="alert">
+        <strong>Disclaimer:</strong> This tool provides behavioral and linguistic analysis only. It is not legal advice and not a clinical evaluation. Outputs may be biased or inaccurate.
+      </div>
+    </div>
 
     {% block content %}{% endblock %}
 
