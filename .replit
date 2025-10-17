@@ -1,11 +1,35 @@
-run = "bash -lc 'python3 -m venv /workspace/.venv || true; /workspace/.venv/bin/python -m pip install --upgrade pip setuptools wheel || true; /workspace/.venv/bin/pip install -r requirements.txt || true; PORT=${PORT:-5000} /workspace/.venv/bin/python wsgi.py'"
-language = "python3"
-entrypoint = "wsgi.py"
-[env]
-PYTHONPATH = "."
-FLASK_ENV = "development"
-PYTHONUNBUFFERED = "1"
 
 [nix]
-packages = ["python39Packages.flask"]
+packages = [
+  "python313",
+  "python313Packages.flask",
+  "python313Packages.flask-login",
+  "python313Packages.flask-migrate", 
+  "python313Packages.flask-sqlalchemy",
+  "python313Packages.psycopg2",
+  "python313Packages.boto3",
+  "python313Packages.python-dotenv",
+  "python313Packages.markdownify",
+  "python313Packages.markdown",
+  "python313Packages.bleach",
+  "python313Packages.jinja2",
+  "python313Packages.itsdangerous",
+  "python313Packages.werkzeug",
+  "python313Packages.requests",
+  "python313Packages.authlib",
+  "python313Packages.flask-limiter",
+  "python313Packages.textstat",
+  "python313Packages.vadersentiment"
+]
 
+[workflows]
+runButton = "Run Flask App"
+
+[[workflows.workflow]]
+name = "Run Flask App"
+author = 39427985
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python wsgi.py"
