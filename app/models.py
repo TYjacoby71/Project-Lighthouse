@@ -68,6 +68,8 @@ class Communication(db.Model):
 
     content_md: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ai_analysis: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Embedding vector for semantic search (e.g., Gemini text-embedding-004)
+    embedding: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Extracted metrics (duplicated for convenient querying)
     word_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
