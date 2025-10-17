@@ -167,31 +167,60 @@ def api_upload():
     else:
         text = text_content or file_bytes.decode('utf-8', errors='ignore')
 
-    # Naive text→Markdown: paragraphs and lists preservation
+    # Basic cleanup
     if text:
+        cleaned = '\n'.join([line.strip() for line in text.splitlines()])
         from markdownify import markdownify as md
-        # markdownify expects HTML, but we can wrap paragraphs simply
-        paragraphs = [p.strip() for p in text.split('\n')]
+        paragraphs = [p for p in cleaned.split('\n')]
         htmlish = ''.join(f'<p>{p}</p>' if p else '<br/>' for p in paragraphs)
         content_md = md(htmlish)
 
-    # spaCy + simple sentiment via TextBlob as placeholder
+    # NLP metrics: word/char, readability, sentiment, POS, entities
     nlp_metrics = {
         'word_count': len(text.split()) if text else 0,
+        'char_count': len(text) if text else 0,
+        'readability_score': None,
+        'pos_counts': {},
         'named_entities': [],
         'sentiment_score': 0.0,
     }
     try:
-        import spacy
-        from textblob import TextBlob
-        nlp = spacy.load('en_core_web_sm')
-        doc = nlp(text or '')
-        ents = []
-        for ent in doc.ents:
-            if ent.label_ in {'PERSON', 'ORG', 'GPE', 'DATE', 'MONEY'}:
-                ents.append({'text': ent.text, 'label': ent.label_})
-        nlp_metrics['named_entities'] = ents
-        nlp_metrics['sentiment_score'] = float(TextBlob(text or '').sentiment.polarity)
+        # readability
+        try:
+            import textstat
+            nlp_metrics['readability_score'] = float(textstat.flesch_kincaid_grade(text or ''))
+        except Exception:
+            pass
+
+        # sentiment via VADER or TextBlob fallback
+        try:
+            from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+            vs = SentimentIntensityAnalyzer()
+            nlp_metrics['sentiment_score'] = float(vs.polarity_scores(text or '').get('compound', 0.0))
+        except Exception:
+            try:
+                from textblob import TextBlob
+                nlp_metrics['sentiment_score'] = float(TextBlob(text or '').sentiment.polarity)
+            except Exception:
+                pass
+
+        # spaCy NER + POS counts
+        try:
+            import spacy
+            nlp = spacy.load('en_core_web_sm')
+            doc = nlp(text or '')
+            ents = []
+            for ent in doc.ents:
+                if ent.label_ in {'PERSON', 'ORG', 'GPE', 'DATE', 'MONEY'}:
+                    ents.append({'text': ent.text, 'label': ent.label_})
+            nlp_metrics['named_entities'] = ents
+            pos_counts = {'NOUN': 0, 'VERB': 0, 'ADJ': 0, 'ADV': 0}
+            for token in doc:
+                if token.pos_ in pos_counts:
+                    pos_counts[token.pos_] += 1
+            nlp_metrics['pos_counts'] = pos_counts
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -245,6 +274,12 @@ def api_upload():
         original_filename=original_filename,
         content_md=content_md,
         ai_analysis=ai_analysis,
+        word_count=nlp_metrics.get('word_count'),
+        char_count=nlp_metrics.get('char_count'),
+        readability_score=nlp_metrics.get('readability_score'),
+        sentiment_score=nlp_metrics.get('sentiment_score'),
+        auto_detected_entities=nlp_metrics.get('named_entities'),
+        pos_counts=nlp_metrics.get('pos_counts'),
     )
     db.session.add(comm)
     db.session.commit()
@@ -298,6 +333,28 @@ def presigned_url(communication_id: int):
         return jsonify({'url': url})
     except Exception:
         return jsonify({'error': 'Failed to create URL'}), 500
+
+
+@main_bp.route('/api/communications/<int:communication_id>/integrity')
+@login_required
+def integrity_check(communication_id: int):
+    comm = db.session.get(Communication, communication_id)
+    if not comm or comm.organization_id != current_user.organization_id:
+        return jsonify({'error': 'Not found'}), 404
+
+    try:
+        if comm.storage_path.startswith('local:'):
+            path = comm.storage_path[len('local:'):]
+            with open(path, 'rb') as f:
+                data = f.read()
+        else:
+            s3 = boto3.client('s3', region_name=current_app.config['AWS_REGION'])
+            obj = s3.get_object(Bucket=current_app.config['AWS_S3_BUCKET'], Key=comm.storage_path)
+            data = obj['Body'].read()
+        h = hashlib.sha256(data).hexdigest()
+        return jsonify({'ok': h == comm.sha256_hash, 'stored': comm.sha256_hash, 'computed': h})
+    except Exception as e:
+        return jsonify({'error': 'Integrity check failed'}), 500
 
 
 @main_bp.route('/api/communications/<int:communication_id>/download')
@@ -443,3 +500,69 @@ def draft_response(communication_id: int):
     if not text_out:
         text_out = "AI draft unavailable. Configure GEMINI_API_KEY."
     return jsonify({'draft': text_out})
+
+
+@main_bp.route('/setup')
+@login_required
+def setup_page():
+    cfg = current_app.config
+
+    def present(key: str) -> bool:
+        val = cfg.get(key)
+        if isinstance(val, str):
+            return bool(val.strip())
+        return bool(val)
+
+    envs = [
+        {"name": "SECRET_KEY", "required": True, "present": present('SECRET_KEY'), "notes": "Flask session key"},
+        {"name": "DATABASE_URL", "required": False, "present": present('DATABASE_URL'), "notes": "PostgreSQL recommended; SQLite used if empty"},
+        {"name": "AWS_REGION", "required": False, "present": present('AWS_REGION'), "notes": "S3 region for file storage"},
+        {"name": "AWS_S3_BUCKET", "required": False, "present": present('AWS_S3_BUCKET'), "notes": "Private S3 bucket name"},
+        {"name": "AWS_ACCESS_KEY_ID", "required": False, "present": bool(os.getenv('AWS_ACCESS_KEY_ID')), "notes": "S3 access key (env only)"},
+        {"name": "AWS_SECRET_ACCESS_KEY", "required": False, "present": bool(os.getenv('AWS_SECRET_ACCESS_KEY')), "notes": "S3 secret key (env only)"},
+        {"name": "GEMINI_API_KEY", "required": False, "present": present('GEMINI_API_KEY'), "notes": "Google Gemini API key"},
+        {"name": "GOOGLE_CLIENT_ID", "required": False, "present": bool(os.getenv('GOOGLE_CLIENT_ID')), "notes": "Google OAuth client id"},
+        {"name": "GOOGLE_CLIENT_SECRET", "required": False, "present": bool(os.getenv('GOOGLE_CLIENT_SECRET')), "notes": "Google OAuth client secret"},
+        {"name": "OAUTH_CALLBACK_URL", "required": False, "present": bool(os.getenv('OAUTH_CALLBACK_URL')), "notes": "OAuth redirect URI"},
+        {"name": "ORIGIN", "required": False, "present": present('ORIGIN'), "notes": "Frontend origin (CORS)"},
+        {"name": "UPLOAD_MAX_SIZE_MB", "required": False, "present": bool(os.getenv('UPLOAD_MAX_SIZE_MB')), "notes": "Upload size limit (default 25MB)"},
+        {"name": "SESSION_COOKIE_SECURE", "required": False, "present": bool(os.getenv('SESSION_COOKIE_SECURE')), "notes": "Set 'true' in production"},
+        # Future optional integrations
+        {"name": "TWILIO_ACCOUNT_SID", "required": False, "present": bool(os.getenv('TWILIO_ACCOUNT_SID')), "notes": "(Future) SMS integration"},
+        {"name": "TWILIO_AUTH_TOKEN", "required": False, "present": bool(os.getenv('TWILIO_AUTH_TOKEN')), "notes": "(Future) SMS integration"},
+        {"name": "TWILIO_FROM_NUMBER", "required": False, "present": bool(os.getenv('TWILIO_FROM_NUMBER')), "notes": "(Future) SMS sender"},
+        {"name": "SMTP_HOST", "required": False, "present": bool(os.getenv('SMTP_HOST')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_PORT", "required": False, "present": bool(os.getenv('SMTP_PORT')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_USER", "required": False, "present": bool(os.getenv('SMTP_USER')), "notes": "(Future) Email sending"},
+        {"name": "SMTP_PASSWORD", "required": False, "present": bool(os.getenv('SMTP_PASSWORD')), "notes": "(Future) Email sending"},
+    ]
+
+    # Integration readiness checks
+    db_url = None
+    try:
+        db_url = str(db.engine.url)
+    except Exception:
+        db_url = 'Unavailable'
+
+    def check_import(mod_path: str) -> bool:
+        try:
+            __import__(mod_path)
+            return True
+        except Exception:
+            return False
+
+    integrations = [
+        {"name": "Database (SQLAlchemy)", "ready": True, "detail": db_url},
+        {"name": "S3 Storage", "ready": (present('AWS_REGION') and present('AWS_S3_BUCKET') and bool(os.getenv('AWS_ACCESS_KEY_ID')) and bool(os.getenv('AWS_SECRET_ACCESS_KEY'))), "detail": "AWS region/bucket + keys"},
+        {"name": "Google OAuth", "ready": (bool(os.getenv('GOOGLE_CLIENT_ID')) and bool(os.getenv('GOOGLE_CLIENT_SECRET'))), "detail": "Google client configured"},
+        {"name": "Gemini API", "ready": present('GEMINI_API_KEY'), "detail": "GEMINI_API_KEY present"},
+        {"name": "PyMuPDF (fitz)", "ready": check_import('fitz'), "detail": "PDF text extraction"},
+        {"name": "spaCy model", "ready": check_import('spacy'), "detail": "NER/POS (model may need download)"},
+        {"name": "FAISS + LangChain", "ready": (check_import('langchain') and check_import('langchain_community.vectorstores.faiss')), "detail": "Vector index"},
+        {"name": "Rate limiting", "ready": True, "detail": "In-memory (dev); configure storage in prod"},
+        {"name": "SMS (Twilio)", "ready": False, "detail": "Not implemented yet"},
+        {"name": "Email sending", "ready": False, "detail": "Not implemented yet"},
+        {"name": "Google Drive import", "ready": False, "detail": "Not implemented yet"},
+    ]
+
+    return render_template('main/setup.html', envs=envs, integrations=integrations)
