@@ -1,3 +1,4 @@
+modules = ["python-3.11"]
 
 [nix]
 packages = [
@@ -32,4 +33,4 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python wsgi.py"
+args = "python3 wsgi.py"
