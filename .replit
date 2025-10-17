@@ -34,3 +34,7 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 wsgi.py"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
