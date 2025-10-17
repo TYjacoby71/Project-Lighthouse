@@ -107,6 +107,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                     ('sentiment_score', 'FLOAT'),
                     ('auto_detected_entities', 'TEXT'),
                     ('pos_counts', 'TEXT'),
+                    ('embedding', 'TEXT'),
                 ]
                 for col, ddl in add_cols:
                     if col not in comm_cols:

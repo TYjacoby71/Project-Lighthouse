@@ -284,10 +284,70 @@ def api_upload():
     db.session.add(comm)
     db.session.commit()
 
-    # Update FAISS vector index (placeholder)
+    # Optional: auto-thread based on filename heuristics (YYYY-MM-DD_Sender-to-Recipient_Subject.pdf)
     try:
-        from langchain.embeddings import FakeEmbeddings
+        base = os.path.splitext(original_filename or '')[0]
+        parts = base.split('_')
+        subject_guess = None
+        if len(parts) >= 3:
+            # Allow anything after second underscore to be subject
+            subject_guess = '_'.join(parts[2:]).replace('-', ' ').strip() or None
+        if subject_guess:
+            # create/find conversation row
+            from ..models import Conversation
+            conv = (
+                db.session.query(Conversation)
+                .filter(Conversation.organization_id == current_user.organization_id, Conversation.subject == subject_guess)
+                .first()
+            )
+            if not conv:
+                conv = Conversation(organization_id=current_user.organization_id, subject=subject_guess)
+                db.session.add(conv)
+                db.session.flush()
+            comm.conversation_id = conv.id
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    # Compute embedding and update vector index (placeholder embeddings if Gemini not configured)
+    try:
+        # Prefer Google Generative AI embeddings if key present; fallback to FakeEmbeddings
+        embedding_vector = None
+        gemini_key = current_app.config.get('GEMINI_API_KEY')
+        if gemini_key and (content_md or text):
+            import requests
+            # Gemini embedding endpoint (text-embedding-004). Adjust if API differs.
+            emb_resp = requests.post(
+                'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedText',
+                params={'key': gemini_key},
+                json={'text': (content_md or text or '')[:20000]},
+                timeout=30,
+            )
+            if emb_resp.ok:
+                emb_data = emb_resp.json()
+                vals = (
+                    emb_data.get('embedding')
+                    or emb_data.get('embeddingResult')
+                    or emb_data.get('data')
+                )
+                # Very permissive shape handling; store when list of numbers is found
+                if isinstance(vals, dict) and 'values' in vals:
+                    embedding_vector = vals['values']
+                elif isinstance(vals, list) and vals and isinstance(vals[0], (int, float)):
+                    embedding_vector = vals
+        if embedding_vector is None:
+            from langchain.embeddings import FakeEmbeddings
+            embedding_vector = FakeEmbeddings(size=1536).embed_query((content_md or text or '')[:1000])
+        # persist embedding on record for simple semantic filtering
+        try:
+            comm.embedding = embedding_vector
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # Update FAISS index for local search (use FakeEmbeddings for determinism without extra deps)
         from langchain_community.vectorstores import FAISS
+        from langchain.embeddings import FakeEmbeddings
         embeddings = FakeEmbeddings(size=1536)
         index_dir = os.path.join('/workspace/var/indexes', str(current_user.organization_id))
         os.makedirs(index_dir, exist_ok=True)
@@ -391,8 +451,8 @@ def api_chat():
     # Retrieve from FAISS index
     contexts = []
     try:
-        from langchain.embeddings import FakeEmbeddings
         from langchain_community.vectorstores import FAISS
+        from langchain.embeddings import FakeEmbeddings
         embeddings = FakeEmbeddings(size=1536)
         index_dir = os.path.join('/workspace/var/indexes', str(current_user.organization_id))
         if os.path.exists(os.path.join(index_dir, 'index.faiss')):
@@ -476,10 +536,12 @@ def draft_response(communication_id: int):
     comm = db.session.get(Communication, communication_id)
     if not comm or comm.organization_id != current_user.organization_id:
         return jsonify({'error': 'Not found'}), 404
+    user_goal = (request.get_json(silent=True) or {}).get('goal') or ''
     base_prompt = (
-        "You are a paralegal assistant specializing in clear, non-emotional communication. "
-        "Help the user draft a response to the message below. Return plain text.\n\n" \
-        + (comm.content_md or '')
+        "You are a paralegal assistant specializing in clear, non-emotional, and court-friendly communication.\n"
+        "Draft a concise response that addresses the core points, avoids emotional language, and is suitable for a legal record.\n"
+        f"User's goal: {user_goal}\n\n"
+        "Original message (Markdown):\n" + (comm.content_md or '')
     )
     text_out = None
     try:
