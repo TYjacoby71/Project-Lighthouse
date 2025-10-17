@@ -5,7 +5,7 @@ packages = [
   "python311",
   "python311Packages.flask",
   "python311Packages.flask-login",
-  "python311Packages.flask-migrate", 
+  "python311Packages.flask-migrate",
   "python311Packages.flask-sqlalchemy",
   "python311Packages.psycopg2",
   "python311Packages.boto3",
