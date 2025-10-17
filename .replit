@@ -2,25 +2,25 @@ modules = ["python-3.11"]
 
 [nix]
 packages = [
-  "python313",
-  "python313Packages.flask",
-  "python313Packages.flask-login",
-  "python313Packages.flask-migrate", 
-  "python313Packages.flask-sqlalchemy",
-  "python313Packages.psycopg2",
-  "python313Packages.boto3",
-  "python313Packages.python-dotenv",
-  "python313Packages.markdownify",
-  "python313Packages.markdown",
-  "python313Packages.bleach",
-  "python313Packages.jinja2",
-  "python313Packages.itsdangerous",
-  "python313Packages.werkzeug",
-  "python313Packages.requests",
-  "python313Packages.authlib",
-  "python313Packages.flask-limiter",
-  "python313Packages.textstat",
-  "python313Packages.vadersentiment"
+  "python311",
+  "python311Packages.flask",
+  "python311Packages.flask-login",
+  "python311Packages.flask-migrate", 
+  "python311Packages.flask-sqlalchemy",
+  "python311Packages.psycopg2",
+  "python311Packages.boto3",
+  "python311Packages.python-dotenv",
+  "python311Packages.markdownify",
+  "python311Packages.markdown",
+  "python311Packages.bleach",
+  "python311Packages.jinja2",
+  "python311Packages.itsdangerous",
+  "python311Packages.werkzeug",
+  "python311Packages.requests",
+  "python311Packages.authlib",
+  "python311Packages.flask-limiter",
+  "python311Packages.textstat",
+  "python311Packages.vadersentiment"
 ]
 
 [workflows]
