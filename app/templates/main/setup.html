@@ -1,0 +1,74 @@
+{% extends 'layout.html' %}
+{% block title %}Setup & Integrations{% endblock %}
+{% block content %}
+<div class="container mt-4" style="max-width: 1000px;">
+  <h3 class="mb-3">Setup & Integrations</h3>
+  <p class="text-muted">This page lists the environment variables and integrations required for full functionality. Values are not shown; only presence is indicated.</p>
+
+  <div class="card mb-4">
+    <div class="card-header">Environment Variables</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th style="width: 280px;">Name</th>
+              <th style="width: 100px;">Required</th>
+              <th style="width: 120px;">Configured</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in envs %}
+            <tr>
+              <td><code>{{ e.name }}</code></td>
+              <td>{{ 'Yes' if e.required else 'No' }}</td>
+              <td>
+                {% if e.present %}
+                <span class="badge text-bg-success">Present</span>
+                {% else %}
+                <span class="badge text-bg-danger">Missing</span>
+                {% endif %}
+              </td>
+              <td>{{ e.notes }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Integrations Readiness</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th style="width: 280px;">Integration</th>
+              <th style="width: 120px;">Status</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i in integrations %}
+            <tr>
+              <td>{{ i.name }}</td>
+              <td>
+                {% if i.ready %}
+                <span class="badge text-bg-success">Ready</span>
+                {% else %}
+                <span class="badge text-bg-warning">Pending</span>
+                {% endif %}
+              </td>
+              <td>{{ i.detail }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

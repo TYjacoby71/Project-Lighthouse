@@ -1,17 +1,8 @@
-[agent]
-expertMode = true
+run = "bash -lc 'python3 -m venv /workspace/.venv || true; /workspace/.venv/bin/python -m pip install --upgrade pip setuptools wheel || true; /workspace/.venv/bin/pip install -r requirements.txt || true; PORT=${PORT:-5000} /workspace/.venv/bin/python wsgi.py'"
+language = "python3"
+entrypoint = "wsgi.py"
+[env]
+PYTHONPATH = "."
+FLASK_ENV = "development"
+PYTHONUNBUFFERED = "1"
 
-[nix]
-channel = "stable-25_05"
-
-[workflows]
-runButton = "Run Flask App"
-
-[[workflows.workflow]]
-name = "Run Flask App"
-author = 39427985
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python wsgi.py"
