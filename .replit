@@ -3,26 +3,6 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = [
-  "python313",
-  "python313Packages.flask", 
-  "python313Packages.flask-sqlalchemy",
-  "python313Packages.flask-login",
-  "python313Packages.flask-migrate",
-  "python313Packages.psycopg2",
-  "python313Packages.boto3",
-  "python313Packages.python-dotenv",
-  "python313Packages.markdownify",
-  "python313Packages.markdown",
-  "python313Packages.bleach",
-  "python313Packages.requests",
-  "python313Packages.spacy",
-  "python313Packages.textblob",
-  "python313Packages.pymupdf",
-  "python313Packages.langchain",
-  "python313Packages.langchain-community",
-  "python313Packages.faiss"
-]
 
 [workflows]
 runButton = "Run Flask App"
@@ -34,4 +14,4 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 wsgi.py"
+args = "python wsgi.py"
