@@ -6,3 +6,6 @@ PYTHONPATH = "."
 FLASK_ENV = "development"
 PYTHONUNBUFFERED = "1"
 
+[nix]
+packages = ["python39Packages.flask"]
+
